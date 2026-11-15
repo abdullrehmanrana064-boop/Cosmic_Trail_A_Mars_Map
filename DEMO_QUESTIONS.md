@@ -142,3 +142,16 @@ Explains what ARIA can do and gives example questions.
 49. Who are you?
 
 Total: 71 questions (numbering in each section is local).
+
+## Additional Mars mission questions
+
+These six questions exercise the expanded NASA-cited knowledge entries in `app/mars_kb.py`.
+
+- Why is Mars red?
+- Can humans breathe on Mars?
+- Is there life on Mars?
+- How many moons does Mars have?
+- What is Olympus Mons?
+- Does Mars have seasons?
+
+Each answer gives a concise response first, a short explanation, a practical next suggestion and a follow-up question. NASA source URLs are included in the assistant response payload. ARIA remains a deterministic, rule-based assistant; this knowledge expansion is not model fine-tuning or live web retrieval.
