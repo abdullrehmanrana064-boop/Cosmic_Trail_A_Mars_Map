@@ -241,7 +241,9 @@ async def test_demo_question_endpoint(client, question, intent):
     assert d["data_source"]
     assert d["confidence"] in ("high", "medium", "low", "none")
 
-\n\ndef test_added_mars_topics_answer_with_cited_nasa_sources():
+
+
+def test_added_mars_topics_answer_with_cited_nasa_sources():
     cases = {
         "Why is Mars red?": ("mars_red", "iron"),
         "Can humans breathe on Mars?": ("human_breathing", "carbon dioxide"),
