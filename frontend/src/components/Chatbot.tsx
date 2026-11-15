@@ -145,7 +145,7 @@ export default function Chatbot() {
   return (
     <>
       <button className={`aria-fab ${open ? 'open' : ''}`} data-occludes onClick={() => setOpen(o => !o)}
-              aria-expanded={open} aria-controls="aria-panel" title="ARIA — rule-based terrain assistant">
+              aria-expanded={open} aria-controls="aria-panel" title="ARIA — Mars mission advisor">
         🤖 ARIA
       </button>
       {open && (
@@ -159,7 +159,7 @@ export default function Chatbot() {
           <header>
             <div>
               <h3>ARIA</h3>
-              <p>Astronaut Route Intelligence Assistant · rule-based · offline</p>
+              <p>Mars Mission Advisor · NASA-grounded knowledge · offline</p>
             </div>
             <button className="close" aria-label="Close ARIA" onClick={() => setOpen(false)}>×</button>
           </header>
@@ -181,6 +181,14 @@ export default function Chatbot() {
                     <span className={`conf ${m.reply.confidence}`}>confidence: {m.reply.confidence}</span>
                     <span className="where">📍 {fmt(m.reply.location.lon, m.reply.location.lat)}</span>
                     {m.reply.caveat && <small>{m.reply.caveat}</small>}
+                    {Array.isArray((m.reply.data as { sources?: unknown }).sources) && (
+                      <div className="aria-sources">
+                        <small>Sources:</small>
+                        {((m.reply.data as { sources: { title: string; url: string }[] }).sources).map(source => (
+                          <a key={source.url} href={source.url} target="_blank" rel="noreferrer">{source.title}</a>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -192,7 +200,7 @@ export default function Chatbot() {
           </div>
           <form className="aria-input" onSubmit={e => { e.preventDefault(); send(input) }}>
             <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)} maxLength={500}
-                   placeholder="Ask about slope, hazards, minerals…" aria-label="Message ARIA" />
+                   placeholder="Ask about Mars, Curiosity, terrain, routes…" aria-label="Message ARIA" />
             <button type="submit" className="primary" disabled={busy || !input.trim()}>Send</button>
           </form>
           <p className="aria-foot">Answers use the point at the centre of the map. Not a safety certification.</p>
