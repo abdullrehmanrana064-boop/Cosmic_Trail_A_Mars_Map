@@ -94,6 +94,12 @@ DEMO_QUESTIONS: list[tuple[str, str]] = [
     ("Can I trust your answers?", "kb"),
     ("Are you AI?", "kb"),
     ("How much gravity is there?", "kb"),
+    ("Why is Mars red?", "kb"),
+    ("Can humans breathe on Mars?", "kb"),
+    ("Is there life on Mars?", "kb"),
+    ("How many moons does Mars have?", "kb"),
+    ("What is Olympus Mons?", "kb"),
+    ("Does Mars have seasons?", "kb"),
     # help / greeting
     ("What can you do?", "help"),
     ("help", "help"),
@@ -234,3 +240,21 @@ async def test_demo_question_endpoint(client, question, intent):
     assert d["reply"].strip()
     assert d["data_source"]
     assert d["confidence"] in ("high", "medium", "low", "none")
+
+\n\ndef test_added_mars_topics_answer_with_cited_nasa_sources():
+    cases = {
+        "Why is Mars red?": ("mars_red", "iron"),
+        "Can humans breathe on Mars?": ("human_breathing", "carbon dioxide"),
+        "Is there life on Mars?": ("life_on_mars", "No confirmed evidence"),
+        "How many moons does Mars have?": ("mars_moons", "Phobos and Deimos"),
+        "What is Olympus Mons?": ("olympus_mons", "largest volcano"),
+        "Does Mars have seasons?": ("mars_seasons", "axis is tilted"),
+    }
+    for question, (topic, phrase) in cases.items():
+        d = _ask_no_data(question)
+        assert d["intent"] == "kb"
+        assert d["data"]["topic"] == topic
+        assert phrase.lower() in d["reply"].lower()
+        assert d["data"]["sources"]
+        assert all(s["url"].startswith("https://") and "nasa.gov" in s["url"] for s in d["data"]["sources"])
+        assert d["follow_up"] and d["follow_up"].endswith("?")
