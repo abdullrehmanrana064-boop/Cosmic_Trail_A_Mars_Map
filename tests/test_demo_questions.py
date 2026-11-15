@@ -60,6 +60,13 @@ DEMO_QUESTIONS: list[tuple[str, str]] = [
     ("How much radiation is there?", "weather"),
     ("What's the weather like?", "weather"),
     ("How windy is it?", "weather"),
+    ("What does REMS measure?", "weather"),
+    ("Where does the weather data come from?", "weather"),
+    ("Is the temperature the same across the whole crater?", "weather"),
+    ("What is the ground temperature?", "weather"),
+    ("How much UV is there?", "weather"),
+    ("What's the humidity?", "weather"),
+    ("What is the air pressure?", "weather"),
     # thermal / dunes along the route
     ("Is the route hot?", "route_thermal"),
     ("Temperature on this path?", "route_thermal"),
@@ -105,7 +112,35 @@ def test_windy_is_honest_about_missing_wind_data():
     d = _ask_no_data("How windy is it?")
     assert d["intent"] == "weather"
     assert d["confidence"] == "none"
-    assert "No wind or pressure data" in d["reply"]
+    assert "No wind data" in d["reply"]
+
+
+def test_weather_answers_stay_inside_nasa_material():
+    """Hackathon rule: only NASA-provided data. No outside figures, no invented values."""
+    for q in ("How cold is it?", "What does REMS measure?", "Is the temperature the same across the whole crater?",
+              "What is the ground temperature?", "How much radiation is there?", "What's the humidity?"):
+        d = _ask_no_data(q)
+        text = d["reply"] + " " + d["data_source"] + " " + d["caveat"]
+        assert "Hassler" not in text and "mSv" not in text
+        assert "NASA" in d["data_source"]
+
+
+def test_crater_wide_temperature_is_not_invented():
+    d = _ask_no_data("Is the temperature the same across the whole crater?")
+    assert "can't give one temperature for the whole crater" in d["reply"]
+    assert "MarsWRF" in d["reply"] and "not a forecast" in d["caveat"].lower()
+
+
+def test_ground_temperature_is_not_confused_with_air_temperature():
+    d = _ask_no_data("What is the ground temperature?")
+    assert d["confidence"] == "none" and "No ground-temperature data" in d["reply"]
+
+
+def test_rems_answer_names_instrument_and_parameters():
+    d = _ask_no_data("What does REMS measure?")
+    for word in ("air temperature", "ground temperature", "pressure", "wind", "humidity", "UV"):
+        assert word in d["reply"]
+    assert "Bradbury Landing" in d["reply"] and "Kelvin" in d["caveat"]
 
 
 # ---- full endpoint (skipped without the real dataset) ----

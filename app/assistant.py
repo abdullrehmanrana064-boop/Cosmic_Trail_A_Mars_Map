@@ -8,8 +8,8 @@ answer is assembled from data already loaded by the backend:
   route_safety / distance     → the route summary the frontend sends (last route result)
   minerals                    → bundled aqueous-mineral sites (Ehlmann & Edwards 2014)
                                 + the cited science cards (app/science.py)
-  weather                     → published REMS air-temperature and RAD radiation figures
-                                (app/weather_facts.py, each with its citation); no live data
+  weather                     → NASA REMS facts only (app/weather_facts.py): air-temperature range at the
+                                rover's site, what REMS measures, honest 'not loaded' for the rest; no live data
 
 Replies are plain language first, numbers second (see _say):
   line 1  verdict      ✅ safe by slope / ⚠️ caution / ❌ avoid / 🔬 finding / 📍 📏 info / ❓ no data
@@ -44,7 +44,7 @@ INTENTS: list[tuple[str, list[str]]] = [
     ("hazard", ["hazard", "hazards", "danger", "dangers", "dangerous", "avoid", "obstacle", "obstacles",
                 "cliff", "cliffs"]),
     ("weather", ["weather", "temperature", "wind", "radiation", "dust storm", "pressure", "rems", "climate",
-                 "cold", "hot", "warm", "freezing", "degrees", "windy"]),
+                 "cold", "hot", "warm", "freezing", "degrees", "windy", "humidity", "humid", "uv", "ultraviolet"]),
     ("minerals", ["mineral", "minerals", "rock", "rocks", "geology", "clay", "clays", "sulfate", "sulfates", "sulphate",
                   "crism", "mudstone", "silica", "carbonate", "chloride"]),
     ("route_safety", ["route", "path", "my route", "traverse"]),
@@ -546,44 +546,68 @@ class Assistant:
                       source, "medium", "route_thermal", {"thermal": thermal, "note": note}, caveat=caveat)
 
     def weather(self, lon: float, lat: float, message: str) -> Answer:
-        """Published Gale Crater temperature / radiation figures (app/weather_facts.py). Never live data."""
+        """NASA-sourced Gale Crater weather facts (app/weather_facts.py). Never live data, no outside sources."""
         m = message.lower()
         has = lambda words: any(re.search(rf"\b{re.escape(w)}\b", m) for w in words)
-        asks_temp, asks_rad = has(wf.TEMPERATURE_WORDS), has(wf.RADIATION_WORDS)
-        asks_general = has(("weather", "climate", "rems"))
-        if has(wf.OTHER_WORDS) and not (asks_temp or asks_rad or asks_general):
-            # Wind / pressure / dust: nothing verified is loaded, so say so.
-            return Answer(_say("❓ No wind or pressure data loaded.",
-                               "COSMIC TRAIL has no REMS wind, pressure or dust readings, so I can't give a value.",
-                               [f"Published: radiation ≈ {wf.RADIATION_MSV_PER_DAY} mSv/day at Gale ({wf.RADIATION_SOURCE})"]),
-                          "Published study (no live data)", "none", "weather",
+        asks_temp = has(wf.TEMPERATURE_WORDS)
+        missing = [label for word, label in wf.NOT_LOADED.items() if re.search(rf"\b{re.escape(word)}\b", m)]
+        missing = list(dict.fromkeys(missing))          # keep order, drop duplicates
+        rover_range = [f"typical daily high ≈ {wf.AIR_TEMP_HIGH_C} °C", f"typical daily low ≈ {wf.AIR_TEMP_LOW_C} °C"]
+        source = f"NASA REMS ({wf.AIR_TEMP_SOURCE}, {wf.AIR_TEMP_PERIOD})"
+        base = {"air_temp_high_c": wf.AIR_TEMP_HIGH_C, "air_temp_low_c": wf.AIR_TEMP_LOW_C,
+                "period": wf.AIR_TEMP_PERIOD, "source_url": wf.AIR_TEMP_URL}
+
+        # 1) "Temperature across the whole crater?" — NASA says one rover reading must not be spread over the crater.
+        if asks_temp and has(wf.CRATER_WIDE_WORDS):
+            return Answer(_say("⚠️ I can't give one temperature for the whole crater.",
+                               wf.MAPPING_NOTE + " One rover reading should not be applied everywhere.",
+                               [f"at the rover: " + rover_range[0], rover_range[1]],
+                               "A crater-wide layer needs a spatial climate model (e.g. MarsWRF), which COSMIC TRAIL does not include."),
+                          source, "medium", "weather", base,
+                          caveat="Historical rover observations, not a forecast. Do not use for planning.")
+
+        # 2) "What does REMS measure? / where does the weather data come from?"
+        if has(wf.ABOUT_WORDS) or re.search(r"where (does|do|did).*(data|weather|temperature)|data (come|comes) from", m):
+            return Answer(_say("📡 Weather data comes from Curiosity's REMS instrument.",
+                               "REMS (Rover Environmental Monitoring Station) measures " + ", ".join(wf.REMS_MEASURES[:-1])
+                               + " and " + wf.REMS_MEASURES[-1] + " at the rover's location.",
+                               [f"landed {wf.LANDING_DATE} at {wf.LANDING_SITE}", "data: NASA PDS Atmospheres Node"],
+                               "COSMIC TRAIL only uses the published air-temperature range from it."),
+                          f"NASA REMS / {wf.REMS_ARCHIVE}", "medium", "weather",
+                          {"measures": list(wf.REMS_MEASURES), "archive": wf.REMS_ARCHIVE, "units_note": wf.REMS_UNITS_NOTE},
+                          caveat=wf.MAPPING_NOTE + " " + wf.REMS_UNITS_NOTE + ".")
+
+        # 3) Ground temperature is a separate REMS measurement from air temperature (NASA: do not mix them up).
+        if has(("ground", "brightness")):
+            return Answer(_say("❓ No ground-temperature data loaded.",
+                               "REMS measures ground temperature separately from air temperature, and COSMIC TRAIL only has the "
+                               "published air-temperature range.",
+                               ["Air, not ground: " + rover_range[0], rover_range[1]]),
+                          source, "none", "weather", base,
+                          caveat="Air temperature and ground temperature differ. Not live data. Do not use for planning.")
+
+        # 4) Something we have no value for (wind, pressure, humidity, UV, radiation, dust): say so, honestly.
+        asks_general = has(("weather", "climate"))
+        if missing and not (asks_temp or asks_general):
+            what = " and ".join(missing)
+            measured_by_rems = [x for x in missing if x in ("wind", "pressure", "humidity", "UV")]
+            why = (f"REMS measures {' and '.join(measured_by_rems)}, but COSMIC TRAIL only has the published air-temperature range."
+                   if measured_by_rems else "COSMIC TRAIL only has the published air-temperature range from REMS.")
+            return Answer(_say(f"❓ No {what} data loaded.", why, ["Published: " + rover_range[0], rover_range[1]]),
+                          source, "none", "weather", base,
                           caveat="Not live data. Do not use for planning.")
-        temp_numbers = [f"typical daily high ≈ {wf.AIR_TEMP_HIGH_C} °C", f"typical daily low ≈ {wf.AIR_TEMP_LOW_C} °C"]
-        rad_number = f"radiation ≈ {wf.RADIATION_MSV_PER_DAY} mSv/day ({wf.RADIATION_SOURCE})"
-        rad_only = asks_rad and not (asks_temp or asks_general)
-        if rad_only:
-            reply = _say("☢️ Radiation at Gale is about 0.64 mSv per day.",
-                         "That is the dose Curiosity's RAD instrument measured on the surface.", [rad_number])
-            source, conf = f"Published study ({wf.RADIATION_SOURCE}, RAD on Curiosity)", "medium"
-        else:
-            swing = wf.AIR_TEMP_HIGH_C - wf.AIR_TEMP_LOW_C
-            with_rad = asks_rad or asks_general
-            numbers = temp_numbers + ([rad_number] if with_rad else [])
-            reply = _say("🌡️ Very cold at Gale Crater.",
-                         f"Air temperature swings by roughly {swing} °C between a typical day's high and low "
-                         f"({wf.AIR_TEMP_PERIOD}).", numbers)
-            source = f"Published REMS summary ({wf.AIR_TEMP_SOURCE})" + (f" + {wf.RADIATION_SOURCE} (RAD)" if with_rad else "")
-            conf = "medium"
-        caveat = ("Published figure, not live data. Radiation varies with solar activity and season. "
-                  "Do not use for planning." if rad_only else
-                  f"Published figures for {wf.AIR_TEMP_PERIOD}, not live weather and not a forecast. "
-                  "Ground temperature differs from air temperature and changes with season and place. "
-                  "Do not use for planning.")
-        return Answer(reply, source, conf, "weather",
-                      {"air_temp_high_c": wf.AIR_TEMP_HIGH_C, "air_temp_low_c": wf.AIR_TEMP_LOW_C,
-                       "period": wf.AIR_TEMP_PERIOD, "radiation_msv_per_day": wf.RADIATION_MSV_PER_DAY,
-                       "source_url": wf.AIR_TEMP_URL},
-                      caveat=caveat)
+
+        # 5) Default: temperature at the rover's site (also "weather", "climate", "how cold is it?").
+        swing = wf.AIR_TEMP_HIGH_C - wf.AIR_TEMP_LOW_C
+        extra = None
+        if missing:
+            extra = f"No {' or '.join(missing)} data is loaded."
+        reply = _say("🌡️ Very cold at Gale Crater.",
+                     f"At the rover's site, air temperature swung by roughly {swing} °C between a typical day's high and low "
+                     f"({wf.AIR_TEMP_PERIOD}).", rover_range, extra)
+        return Answer(reply, source, "medium", "weather", base,
+                      caveat=f"Historical NASA observations for {wf.AIR_TEMP_PERIOD}, not live weather and not a forecast. "
+                             f"{wf.MAPPING_NOTE} Ground temperature differs from air temperature. Do not use for planning.")
 
     def unknown(self, lon: float, lat: float, message: str) -> Answer:
         g = mission_guide_query(message)

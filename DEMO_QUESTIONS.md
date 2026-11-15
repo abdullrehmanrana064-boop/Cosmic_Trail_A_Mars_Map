@@ -6,7 +6,7 @@ so if you change ARIA's keywords, run `python -m pytest tests/test_demo_question
 - ARIA is rule-based and answers in English only.
 - Slope, hazard, elevation and place questions use the **centre of the map**; move the map first.
 - Route questions need a route: set A and B and press **Find Route**, then ask.
-- Weather answers are **published figures** (NASA/JPL PIA16913, Hassler et al. 2014), not live data.
+- Weather answers use **NASA material only** (REMS air-temperature graph PIA16913 and the NASA REMS/PDS descriptions), never live data.
 
 ## Is it safe to walk here?
 
@@ -78,31 +78,38 @@ Terrain type, elevation, geologic unit, nearest minerals, HiRISE coverage.
 29. Where am I?
 30. Tell me about this place
 
-## Weather (published figures)
+## Weather (NASA REMS facts only)
 
-Air temperature and radiation from cited studies; says honestly when wind/pressure are not loaded.
+Air-temperature range at Curiosity's site, what REMS measures and where its data comes from, and an honest "no data loaded" for ground temperature, pressure, wind, humidity, UV and radiation. It refuses to give one temperature for the whole crater (NASA: a rover reading is a point measurement).
 
 31. How cold is it?
 32. What's the temperature?
 33. How much radiation is there?
 34. What's the weather like?
 35. How windy is it?
+36. What does REMS measure?
+37. Where does the weather data come from?
+38. Is the temperature the same across the whole crater?
+39. What is the ground temperature?
+40. How much UV is there?
+41. What's the humidity?
+42. What is the air pressure?
 
 ## Dunes / thermal
 
 Whether the route crosses dune sand (high thermal risk). Press Find Route first for the whole path.
 
-36. Is the route hot?
-37. Temperature on this path?
-38. Will my route cross the dunes?
+43. Is the route hot?
+44. Temperature on this path?
+45. Will my route cross the dunes?
 
 ## Help
 
 Explains what ARIA can do and gives example questions.
 
-39. What can you do?
-40. help
-41. Hello
-42. Who are you?
+46. What can you do?
+47. help
+48. Hello
+49. Who are you?
 
-Total: 42 questions.
+Total: 49 questions.
