@@ -44,8 +44,8 @@ INTENTS: list[tuple[str, list[str]]] = [
     ("hazard", ["hazard", "hazards", "danger", "dangers", "dangerous", "avoid", "obstacle", "obstacles",
                 "cliff", "cliffs"]),
     ("weather", ["weather", "temperature", "wind", "radiation", "dust storm", "pressure", "rems", "climate",
-                 "cold", "hot", "warm", "freezing", "degrees"]),
-    ("minerals", ["mineral", "minerals", "rock", "rocks", "geology", "clay", "sulfate", "sulphate",
+                 "cold", "hot", "warm", "freezing", "degrees", "windy"]),
+    ("minerals", ["mineral", "minerals", "rock", "rocks", "geology", "clay", "clays", "sulfate", "sulfates", "sulphate",
                   "crism", "mudstone", "silica", "carbonate", "chloride"]),
     ("route_safety", ["route", "path", "my route", "traverse"]),
     ("distance", ["distance", "how far", "far is", "km to", "kilometres", "kilometers"]),
@@ -85,6 +85,11 @@ GO_TO_CLAY = re.compile(
 ROUTE_THERMAL = re.compile(
     r"\b(temperatures?|thermal|heat|hot|warm|cold|freezing)\b.*\b(path|route|traverse|trail|walk|way|trip)\b"
     r"|\b(path|route|traverse|trail|walk|way|trip)\b.*\b(temperatures?|thermal|heat|hot|warm|cold|freezing)\b")
+# "Will my route cross the dunes?" — dune sand is a thermal/footing check, not a generic route question.
+DUNES = re.compile(r"\bdunes?\b")
+# Greetings and "what can you do?" — only used when no other intent matched.
+HELP = re.compile(r"\b(help|commands?|what can you do|what do you do|who are you|what are you)\b"
+                  r"|^\s*(hi|hello|hey)\b")
 PLACE_INFO = re.compile(
     r"\bwhat('?s| is) (here|this (place|spot|area))\b|\bwhere am i\b|\b(describe|tell me about) (this|here)\b"
     r"|\bwhat am i (on|standing on|looking at)\b")
@@ -96,11 +101,13 @@ def detect_intent(message: str) -> str:
         return "go_to_clay"
     if PLACE_INFO.search(m):
         return "place_info"
-    if ROUTE_THERMAL.search(m):
+    if ROUTE_THERMAL.search(m) or DUNES.search(m):
         return "route_thermal"
     for intent, words in INTENTS:
         if any(re.search(rf"\b{re.escape(w)}\b", m) for w in words):
             return intent
+    if HELP.search(m):
+        return "help"
     return "unknown"
 
 
@@ -584,8 +591,19 @@ class Assistant:
             return Answer("📚 " + g["response"], "Science cards (Mission Guide)", "medium", "guide",
                           {"cards": [c["card_id"] for c in g["matched_cards"]]})
         return Answer(_say("❓ I didn't catch that.",
-                           "Ask me about slopes, hazards, what's here, the way to clay, your route or minerals.",
-                           ["Try: 'Am I safe here?'", "'Is it safe to walk north?'"]), "none", "none", "unknown")
+                           "I can answer questions about terrain, hazards, minerals, routes and weather at Gale Crater.",
+                           ["Try: 'Am I safe here?'", "'What minerals are nearby?'", "'How cold is it?'"],
+                           "Type 'help' to see everything I can do."), "none", "none", "unknown")
+
+    def help(self) -> Answer:
+        """Greeting / 'what can you do?': one line on what ARIA is, then example questions."""
+        return Answer(_say("👋 I'm ARIA — I answer from the NASA/USGS data loaded in COSMIC TRAIL.",
+                           "I can check slopes and hazards, elevation, minerals, routes, dunes and published weather figures "
+                           "for Gale Crater.",
+                           ["'Am I safe here?'", "'What minerals are nearby?'", "'Best path to clay?'"],
+                           "More: 'Is it safe to walk north?' · 'Analyze my route' · 'How cold is it?' · 'What's here?'"),
+                      "ARIA built-in help", "high", "help",
+                      caveat="Rule-based assistant (no language model). Answers come from loaded data and cited studies.")
 
     # ---------- entry point ----------
     def answer(self, message: str, lon: float, lat: float, route: dict | None = None) -> dict:
@@ -605,6 +623,7 @@ class Assistant:
             "place_info": lambda: self.place_info(lon, lat, message),
             "go_to_clay": lambda: self.go_to_clay(lon, lat, message),
             "route_thermal": lambda: self.route_thermal(lon, lat, message, route),
+            "help": lambda: self.help(),
         }.get(intent, lambda: self.unknown(lon, lat, message))
         a = handler()
         return {"reply": a.reply, "data_source": a.data_source, "confidence": a.confidence,

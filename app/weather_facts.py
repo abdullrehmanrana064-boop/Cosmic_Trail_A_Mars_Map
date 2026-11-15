@@ -25,4 +25,4 @@ RADIATION_SOURCE = "Hassler et al. 2014"
 # Words that mean "tell me about temperature" vs "radiation" (used by Assistant.weather).
 TEMPERATURE_WORDS = ("temperature", "temperatures", "cold", "hot", "warm", "freezing", "heat", "degrees")
 RADIATION_WORDS = ("radiation", "rad", "msv", "dose")
-OTHER_WORDS = ("wind", "pressure", "dust storm")   # no value loaded for these
+OTHER_WORDS = ("wind", "windy", "pressure", "dust storm")   # no value loaded for these
