@@ -121,12 +121,43 @@ async def test_minerals_nearby_uses_detection_sites_and_cards(client):
         assert dists == sorted(dists)
 
 
-async def test_weather_is_honest_about_missing_data(client):
+async def test_weather_gives_cited_published_figures(client):
     await _require_real(client)
     d = await _ask(client, "What's the weather and radiation like?", **BRADBURY)
     assert d["intent"] == "weather"
+    assert d["confidence"] == "medium"
+    assert "-70" in d["reply"] and "Hassler" in d["reply"]
+    assert "PIA16913" in d["data_source"]
+    assert "not live" in d["caveat"].lower()
+
+
+# ---- weather answers (no dataset needed: Assistant.weather uses only the cited facts) ----
+
+def _weather(message: str) -> dict:
+    from app.assistant import Assistant
+    return Assistant(ds=None).answer(message, 137.4417, -4.5895)
+
+
+async def test_weather_temperature_is_cited_and_never_live():
+    d = _weather("What's the temperature at Gale?")
+    assert d["intent"] == "weather"
+    assert "0 °C" in d["reply"] and "-70 °C" in d["reply"]
+    assert "PIA16913" in d["data_source"]
+    assert d["data"]["source_url"].startswith("https://www.jpl.nasa.gov/")
+    assert "not live" in d["caveat"].lower() and "forecast" in d["caveat"].lower()
+
+
+async def test_weather_radiation_only_uses_rad_figure():
+    d = _weather("How much radiation is there?")
+    assert d["intent"] == "weather"
+    assert "0.64" in d["reply"] and "Hassler" in d["data_source"]
+
+
+async def test_weather_wind_and_pressure_stay_honest():
+    d = _weather("What is the wind speed?")
+    assert d["intent"] == "weather"
     assert d["confidence"] == "none"
-    assert "no REMS" in d["reply"] and "Hassler" in d["reply"]
+    assert "No wind or pressure data" in d["reply"]
 
 
 async def test_outside_grid_falls_back_or_declines(client):

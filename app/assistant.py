@@ -8,7 +8,8 @@ answer is assembled from data already loaded by the backend:
   route_safety / distance     → the route summary the frontend sends (last route result)
   minerals                    → bundled aqueous-mineral sites (Ehlmann & Edwards 2014)
                                 + the cited science cards (app/science.py)
-  weather                     → no REMS/RAD data are loaded; says so (one published RAD figure)
+  weather                     → published REMS air-temperature and RAD radiation figures
+                                (app/weather_facts.py, each with its citation); no live data
 
 Replies are plain language first, numbers second (see _say):
   line 1  verdict      ✅ safe by slope / ⚠️ caution / ❌ avoid / 🔬 finding / 📍 📏 info / ❓ no data
@@ -29,6 +30,7 @@ import numpy as np
 
 from .science import CARDS, mission_guide_query
 from . import context as ctx
+from . import weather_facts as wf
 
 MAX_SLOPE_DEG = 15.0       # router default (Apollo EVA traverses, EPSC2024)
 CAUTION_SLOPE_DEG = 10.0   # router default (NASA MSL Engineering User Guide)
@@ -41,7 +43,8 @@ MARS_R = 3396190.0
 INTENTS: list[tuple[str, list[str]]] = [
     ("hazard", ["hazard", "hazards", "danger", "dangers", "dangerous", "avoid", "obstacle", "obstacles",
                 "cliff", "cliffs"]),
-    ("weather", ["weather", "temperature", "wind", "radiation", "dust storm", "pressure", "rems", "climate"]),
+    ("weather", ["weather", "temperature", "wind", "radiation", "dust storm", "pressure", "rems", "climate",
+                 "cold", "hot", "warm", "freezing", "degrees"]),
     ("minerals", ["mineral", "minerals", "rock", "rocks", "geology", "clay", "sulfate", "sulphate",
                   "crism", "mudstone", "silica", "carbonate", "chloride"]),
     ("route_safety", ["route", "path", "my route", "traverse"]),
@@ -536,11 +539,44 @@ class Assistant:
                       source, "medium", "route_thermal", {"thermal": thermal, "note": note}, caveat=caveat)
 
     def weather(self, lon: float, lat: float, message: str) -> Answer:
-        return Answer(_say("❓ No weather data loaded.",
-                           "COSMIC TRAIL has no REMS weather or RAD radiation readings, so I can't tell you current conditions.",
-                           ["Published: radiation ≈ 0.64 mSv/day at Gale (Hassler et al. 2014)"]),
-                      "Published study (no live data)", "none", "weather",
-                      caveat="Not live data. Do not use for planning.")
+        """Published Gale Crater temperature / radiation figures (app/weather_facts.py). Never live data."""
+        m = message.lower()
+        has = lambda words: any(re.search(rf"\b{re.escape(w)}\b", m) for w in words)
+        asks_temp, asks_rad = has(wf.TEMPERATURE_WORDS), has(wf.RADIATION_WORDS)
+        asks_general = has(("weather", "climate", "rems"))
+        if has(wf.OTHER_WORDS) and not (asks_temp or asks_rad or asks_general):
+            # Wind / pressure / dust: nothing verified is loaded, so say so.
+            return Answer(_say("❓ No wind or pressure data loaded.",
+                               "COSMIC TRAIL has no REMS wind, pressure or dust readings, so I can't give a value.",
+                               [f"Published: radiation ≈ {wf.RADIATION_MSV_PER_DAY} mSv/day at Gale ({wf.RADIATION_SOURCE})"]),
+                          "Published study (no live data)", "none", "weather",
+                          caveat="Not live data. Do not use for planning.")
+        temp_numbers = [f"typical daily high ≈ {wf.AIR_TEMP_HIGH_C} °C", f"typical daily low ≈ {wf.AIR_TEMP_LOW_C} °C"]
+        rad_number = f"radiation ≈ {wf.RADIATION_MSV_PER_DAY} mSv/day ({wf.RADIATION_SOURCE})"
+        rad_only = asks_rad and not (asks_temp or asks_general)
+        if rad_only:
+            reply = _say("☢️ Radiation at Gale is about 0.64 mSv per day.",
+                         "That is the dose Curiosity's RAD instrument measured on the surface.", [rad_number])
+            source, conf = f"Published study ({wf.RADIATION_SOURCE}, RAD on Curiosity)", "medium"
+        else:
+            swing = wf.AIR_TEMP_HIGH_C - wf.AIR_TEMP_LOW_C
+            with_rad = asks_rad or asks_general
+            numbers = temp_numbers + ([rad_number] if with_rad else [])
+            reply = _say("🌡️ Very cold at Gale Crater.",
+                         f"Air temperature swings by roughly {swing} °C between a typical day's high and low "
+                         f"({wf.AIR_TEMP_PERIOD}).", numbers)
+            source = f"Published REMS summary ({wf.AIR_TEMP_SOURCE})" + (f" + {wf.RADIATION_SOURCE} (RAD)" if with_rad else "")
+            conf = "medium"
+        caveat = ("Published figure, not live data. Radiation varies with solar activity and season. "
+                  "Do not use for planning." if rad_only else
+                  f"Published figures for {wf.AIR_TEMP_PERIOD}, not live weather and not a forecast. "
+                  "Ground temperature differs from air temperature and changes with season and place. "
+                  "Do not use for planning.")
+        return Answer(reply, source, conf, "weather",
+                      {"air_temp_high_c": wf.AIR_TEMP_HIGH_C, "air_temp_low_c": wf.AIR_TEMP_LOW_C,
+                       "period": wf.AIR_TEMP_PERIOD, "radiation_msv_per_day": wf.RADIATION_MSV_PER_DAY,
+                       "source_url": wf.AIR_TEMP_URL},
+                      caveat=caveat)
 
     def unknown(self, lon: float, lat: float, message: str) -> Answer:
         g = mission_guide_query(message)

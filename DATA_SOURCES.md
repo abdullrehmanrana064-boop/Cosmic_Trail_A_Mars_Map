@@ -69,6 +69,20 @@ waypoints and a science card (`curiosity_official_route`).
 > published coordinate); they were not measured from the NASA map or from the
 > rover's traverse data.
 
+### Published weather figures for ARIA — `app/weather_facts.py`
+
+ARIA's weather answers use **published figures only**, each cited in the file (no REMS/RAD data product
+is loaded and nothing is live):
+
+| Figure | Value | Source |
+|--------|-------|--------|
+| Air temperature, daily high / low | about 0 °C / about −70 °C (mid-Aug 2012 – late Feb 2013) | [NASA/JPL PIA16913](https://www.jpl.nasa.gov/images/pia16913-steady-temperatures-at-mars-gale-crater/), REMS on Curiosity |
+| Radiation | about 0.64 mSv/day | Hassler et al. 2014 (RAD) |
+
+> **Caveat:** these describe one period near the landing site, not a forecast and not the whole Mars year.
+> To use the full REMS record instead, download the reduced MOD RDR files from the PDS Atmospheres Node
+> (https://atmos.nmsu.edu/data_and_services/atmospheres_data/MARS/curiosity/rems.html) and summarise them in a script.
+
 ### NASA Worldview — dust storm context
 
 Worldview tracks dust on Earth, not Mars; it is cited as the reference for the

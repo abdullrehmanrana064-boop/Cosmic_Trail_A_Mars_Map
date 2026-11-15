@@ -13,7 +13,7 @@ const GREETING =
   'Ask me about slopes, hazards, elevation, minerals, your route or Mars geology. I answer from the NASA/USGS data ' +
   'loaded in COSMIC TRAIL and say where each answer comes from. I am rule-based (no AI model) and work offline.'
 
-const QUICK = ['Am I safe here?', 'What minerals are nearby?', 'Analyze my route']
+const QUICK = ['Am I safe here?', 'What minerals are nearby?', 'Analyze my route', 'How cold is it?']
 
 /** Data-source badges shown under each reply. */
 function badges(source: string): string[] {
