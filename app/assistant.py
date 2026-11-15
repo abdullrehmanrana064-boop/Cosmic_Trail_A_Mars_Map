@@ -31,6 +31,7 @@ import numpy as np
 from .science import CARDS, mission_guide_query
 from . import context as ctx
 from . import weather_facts as wf
+from . import mars_kb
 
 MAX_SLOPE_DEG = 15.0       # router default (Apollo EVA traverses, EPSC2024)
 CAUTION_SLOPE_DEG = 10.0   # router default (NASA MSL Engineering User Guide)
@@ -74,6 +75,25 @@ class Answer:
     intent: str
     data: dict[str, Any] = field(default_factory=dict)
     caveat: str | None = None
+    follow_up: str | None = None                       # one question that keeps the conversation going
+    suggestions: list[str] = field(default_factory=list)   # tappable next questions
+
+
+# What ARIA asks next, and which questions it offers, per intent (a conversational advisor, not a stat dump).
+FOLLOW_UPS: dict[str, tuple[str, list[str]]] = {
+    "slope": ("Want me to check the ground in a particular direction?", ["Is it safe to walk north?", "Any hazards nearby?", "Analyze my route"]),
+    "hazard": ("Shall I check the slope along your route?", ["Analyze my route", "How steep is it here?", "Best path to clay?"]),
+    "elevation": ("Want to know how far you are from a landmark?", ["How far is Mount Sharp?", "What's here?", "Am I safe here?"]),
+    "distance": ("Shall I look for a safe way to get there?", ["Analyze my route", "Best path to clay?", "Any hazards nearby?"]),
+    "route_safety": ("Do you want me to check the dunes and temperature along it too?", ["Will my route cross the dunes?", "Is the route hot?", "Any hazards nearby?"]),
+    "minerals": ("Want me to point you to the nearest confirmed clay site?", ["Best path to clay?", "Why are clays important?", "Tell me about Yellowknife Bay"]),
+    "place_info": ("Would you like to know if it's safe to walk from here?", ["Am I safe here?", "What minerals are nearby?", "How cold is it?"]),
+    "go_to_clay": ("Want me to analyze the route once you've set it?", ["Analyze my route", "Why are clays important?", "Any hazards nearby?"]),
+    "route_thermal": ("Shall I check how steep the route is too?", ["Analyze my route", "How cold is it?", "Any hazards nearby?"]),
+    "weather": ("Would you like to know what REMS measures?", ["What does REMS measure?", "What's a sol?", "Tell me about the dust storm"]),
+    "unknown": ("What would you like to explore?", ["Am I safe here?", "What minerals are nearby?", "How cold is it?"]),
+    "help": ("Where would you like to start?", ["Am I safe here?", "What minerals are nearby?", "Best path to clay?"]),
+}
 
 
 # Location-specific questions, checked before the keyword intents ("path", "clay", "here"…).
@@ -101,6 +121,8 @@ def detect_intent(message: str) -> str:
         return "go_to_clay"
     if PLACE_INFO.search(m):
         return "place_info"
+    if mars_kb.lookup(m):
+        return "kb"
     if ROUTE_THERMAL.search(m) or DUNES.search(m):
         return "route_thermal"
     for intent, words in INTENTS:
@@ -130,13 +152,15 @@ def detect_place(message: str) -> dict | None:
 
 
 def _say(verdict: str, sentence: str, numbers: list[str] | None = None, extra: str | None = None) -> str:
-    """Verdict line, one plain sentence, then at most three key numbers (and an optional warning line)."""
-    lines = [verdict, sentence]
+    """Conversational reply: the answer first, then why it matters, then (optionally) key numbers and a heads-up.
+
+    Paragraphs are separated by blank lines; answer() adds the follow-up question as the last paragraph."""
+    parts = [f"{verdict}\n{sentence}"]
     if numbers:
-        lines.append(" · ".join(numbers[:3]))
+        parts.append(" · ".join(numbers[:3]))
     if extra:
-        lines.append(extra)
-    return "\n".join(lines)
+        parts.append(extra)
+    return "\n\n".join(parts)
 
 
 def _data_quality(source: str) -> str:
@@ -609,23 +633,34 @@ class Assistant:
                       caveat=f"Historical NASA observations for {wf.AIR_TEMP_PERIOD}, not live weather and not a forecast. "
                              f"{wf.MAPPING_NOTE} Ground temperature differs from air temperature. Do not use for planning.")
 
+    def kb(self, message: str) -> Answer:
+        e = mars_kb.lookup(message)
+        parts = [e.answer, e.why]
+        if e.tip:
+            parts.append(e.tip)
+        sources = [{"title": t, "url": u} for t, u in e.sources if u]
+        return Answer("\n\n".join(parts), "; ".join(t for t, _ in e.sources),
+                      "none" if e.key == "no_figure" else ("high" if e.nasa else "medium"), "kb",
+                      {"topic": e.key, "sources": sources}, e.caveat, e.follow_up, list(e.chips))
+
     def unknown(self, lon: float, lat: float, message: str) -> Answer:
         g = mission_guide_query(message)
         if g.get("matched_cards"):
             return Answer("📚 " + g["response"], "Science cards (Mission Guide)", "medium", "guide",
                           {"cards": [c["card_id"] for c in g["matched_cards"]]})
-        return Answer(_say("❓ I didn't catch that.",
-                           "I can answer questions about terrain, hazards, minerals, routes and weather at Gale Crater.",
+        return Answer(_say("❓ I'm not sure I understood that one.",
+                           "I can help with terrain, hazards, minerals, routes and weather at Gale Crater, and I can explain "
+                           "Curiosity, its instruments and Mars basics from NASA material.",
                            ["Try: 'Am I safe here?'", "'What minerals are nearby?'", "'How cold is it?'"],
-                           "Type 'help' to see everything I can do."), "none", "none", "unknown")
+                           "Or type 'help' to see everything I can do."), "none", "none", "unknown")
 
     def help(self) -> Answer:
         """Greeting / 'what can you do?': one line on what ARIA is, then example questions."""
-        return Answer(_say("👋 I'm ARIA — I answer from the NASA/USGS data loaded in COSMIC TRAIL.",
-                           "I can check slopes and hazards, elevation, minerals, routes, dunes and published weather figures "
-                           "for Gale Crater.",
+        return Answer(_say("👋 Hi, I'm ARIA, your Mars mission advisor.",
+                           "I answer from the NASA/USGS data in COSMIC TRAIL: slopes and hazards, minerals, routes, dunes and "
+                           "weather at Gale Crater, plus questions about Curiosity, its instruments and Mars in general.",
                            ["'Am I safe here?'", "'What minerals are nearby?'", "'Best path to clay?'"],
-                           "More: 'Is it safe to walk north?' · 'Analyze my route' · 'How cold is it?' · 'What's here?'"),
+                           "More: 'Is it safe to walk north?' · 'Analyze my route' · 'What does ChemCam do?' · 'Why are clays important?'"),
                       "ARIA built-in help", "high", "help",
                       caveat="Rule-based assistant (no language model). Answers come from loaded data and cited studies.")
 
@@ -648,8 +683,15 @@ class Assistant:
             "go_to_clay": lambda: self.go_to_clay(lon, lat, message),
             "route_thermal": lambda: self.route_thermal(lon, lat, message, route),
             "help": lambda: self.help(),
+            "kb": lambda: self.kb(message),
         }.get(intent, lambda: self.unknown(lon, lat, message))
         a = handler()
+        fu, chips = FOLLOW_UPS.get(a.intent, ("", []))
+        a.follow_up = a.follow_up or fu or None
+        a.suggestions = a.suggestions or chips
+        if a.follow_up:
+            a.reply = f"{a.reply}\n\n{a.follow_up}"
         return {"reply": a.reply, "data_source": a.data_source, "confidence": a.confidence,
                 "intent": a.intent, "location": {"lon": lon, "lat": lat}, "data": a.data, "caveat": a.caveat,
+                "follow_up": a.follow_up, "suggestions": a.suggestions,
                 "engine": "rule-based (no language model, offline)"}

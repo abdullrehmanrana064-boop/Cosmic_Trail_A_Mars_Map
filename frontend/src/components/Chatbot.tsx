@@ -9,9 +9,9 @@ import { getMapCenter } from './Globe'
 interface Msg { role: 'aria' | 'user'; text: string; reply?: AssistantReply }
 
 const GREETING =
-  "Hello! I'm ARIA — your Astronaut Route Intelligence Assistant. I'm analysing terrain data for Gale Crater. " +
-  'Ask me about slopes, hazards, elevation, minerals, your route or Mars geology. I answer from the NASA/USGS data ' +
-  'loaded in COSMIC TRAIL and say where each answer comes from. I am rule-based (no AI model) and work offline.'
+  "Hi, I'm ARIA, your Mars mission advisor for Gale Crater. Ask me whether the ground is safe, what minerals are nearby, " +
+  'how to plan a route, or how Curiosity and its instruments work. I answer only from NASA/USGS data and tell you where ' +
+  "each answer comes from.\n\nWhere would you like to start?"
 
 const QUICK = ['Am I safe here?', 'What minerals are nearby?', 'Analyze my route', 'How cold is it?']
 
@@ -139,6 +139,9 @@ export default function Chatbot() {
     }
   }
 
+  const lastReply = [...msgs].reverse().find(m => m.reply)?.reply
+  const chips = lastReply?.suggestions?.length ? lastReply.suggestions : QUICK
+
   return (
     <>
       <button className={`aria-fab ${open ? 'open' : ''}`} data-occludes onClick={() => setOpen(o => !o)}
@@ -163,7 +166,7 @@ export default function Chatbot() {
           <div className="aria-msgs" ref={listRef} aria-live="polite">
             {msgs.map((m, i) => (
               <div key={i} className={`aria-msg ${m.role}`}>
-                <p>{m.text}</p>
+                {m.text.split('\n\n').map((para, k) => <p key={k}>{para}</p>)}
                 {(m.reply?.data as { action?: AssistantAction } | undefined)?.action?.type === 'set_destination' && (() => {
                   const a = (m.reply!.data as { action: AssistantAction }).action
                   return (
@@ -184,8 +187,8 @@ export default function Chatbot() {
             ))}
             {busy && <div className="aria-msg aria typing"><p>Analysing terrain…</p></div>}
           </div>
-          <div className="aria-quick">
-            {QUICK.map(q => <button key={q} onClick={() => send(q)} disabled={busy}>{q}</button>)}
+          <div className="aria-quick" aria-label="Suggested questions">
+            {chips.map(q => <button key={q} onClick={() => send(q)} disabled={busy}>{q}</button>)}
           </div>
           <form className="aria-input" onSubmit={e => { e.preventDefault(); send(input) }}>
             <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)} maxLength={500}

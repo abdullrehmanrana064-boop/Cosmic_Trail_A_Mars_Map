@@ -7,6 +7,8 @@ so if you change ARIA's keywords, run `python -m pytest tests/test_demo_question
 - Slope, hazard, elevation and place questions use the **centre of the map**; move the map first.
 - Route questions need a route: set A and B and press **Find Route**, then ask.
 - Weather answers use **NASA material only** (REMS air-temperature graph PIA16913 and the NASA REMS/PDS descriptions), never live data.
+- Replies follow **answer → why → suggestion → follow-up question**, and the chat shows tappable follow-up questions.
+- "Mission knowledge" answers (below) come from `app/mars_kb.py`, written only from cited NASA pages. Where NASA's pages give no figure (e.g. gravity), ARIA says so instead of guessing.
 
 ## Is it safe to walk here?
 
@@ -103,6 +105,33 @@ Whether the route crosses dune sand (high thermal risk). Press Find Route first 
 44. Temperature on this path?
 45. Will my route cross the dunes?
 
+## Mission knowledge (NASA pages, no dataset needed)
+
+Curiosity, its instruments, Gale Crater, clays, dust and Mars basics, plus how COSMIC TRAIL works.
+
+1. What instruments does Curiosity have?
+2. What does ChemCam do?
+3. What does CheMin do?
+4. What does SAM do?
+5. What does RAD measure?
+6. What powers Curiosity?
+7. What is Curiosity?
+8. What is Gale Crater?
+9. Tell me about Mount Sharp
+10. Why are clays important?
+11. Was there ever water here?
+12. What's a sol?
+13. How cold does Mars get?
+14. How big is Mars?
+15. Tell me about the dust storm
+16. Are there dust devils?
+17. What makes driving hard for the rover?
+18. How do I plan a route?
+19. Why 15 degrees?
+20. Can I trust your answers?
+21. Are you AI?
+22. How much gravity is there?
+
 ## Help
 
 Explains what ARIA can do and gives example questions.
@@ -112,4 +141,4 @@ Explains what ARIA can do and gives example questions.
 48. Hello
 49. Who are you?
 
-Total: 49 questions.
+Total: 71 questions (numbering in each section is local).

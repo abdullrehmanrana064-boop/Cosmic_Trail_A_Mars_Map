@@ -71,6 +71,29 @@ DEMO_QUESTIONS: list[tuple[str, str]] = [
     ("Is the route hot?", "route_thermal"),
     ("Temperature on this path?", "route_thermal"),
     ("Will my route cross the dunes?", "route_thermal"),
+    # NASA mission knowledge (app/mars_kb.py)
+    ("What instruments does Curiosity have?", "kb"),
+    ("What does ChemCam do?", "kb"),
+    ("What does CheMin do?", "kb"),
+    ("What does SAM do?", "kb"),
+    ("What does RAD measure?", "kb"),
+    ("What powers Curiosity?", "kb"),
+    ("What is Curiosity?", "kb"),
+    ("What is Gale Crater?", "kb"),
+    ("Tell me about Mount Sharp", "kb"),
+    ("Why are clays important?", "kb"),
+    ("Was there ever water here?", "kb"),
+    ("What's a sol?", "kb"),
+    ("How cold does Mars get?", "kb"),
+    ("How big is Mars?", "kb"),
+    ("Tell me about the dust storm", "kb"),
+    ("Are there dust devils?", "kb"),
+    ("What makes driving hard for the rover?", "kb"),
+    ("How do I plan a route?", "kb"),
+    ("Why 15 degrees?", "kb"),
+    ("Can I trust your answers?", "kb"),
+    ("Are you AI?", "kb"),
+    ("How much gravity is there?", "kb"),
     # help / greeting
     ("What can you do?", "help"),
     ("help", "help"),
@@ -98,7 +121,7 @@ def _ask_no_data(message: str) -> dict:
 def test_help_lists_example_questions():
     d = _ask_no_data("What can you do?")
     assert d["intent"] == "help"
-    assert "Am I safe here?" in d["reply"] and "How cold is it?" in d["reply"]
+    assert "Am I safe here?" in d["reply"] and "ChemCam" in d["reply"]
     assert "no language model" in d["caveat"].lower()
 
 
@@ -141,6 +164,49 @@ def test_rems_answer_names_instrument_and_parameters():
     for word in ("air temperature", "ground temperature", "pressure", "wind", "humidity", "UV"):
         assert word in d["reply"]
     assert "Bradbury Landing" in d["reply"] and "Kelvin" in d["caveat"]
+
+
+# ---- conversational shape + NASA knowledge base ----
+
+NO_DATA_INTENTS = ("weather", "kb", "help")
+NO_DATA_QUESTIONS = [q for q, i in DEMO_QUESTIONS if i in NO_DATA_INTENTS]
+
+
+def test_every_answer_ends_with_a_follow_up_question_and_chips():
+    for q in NO_DATA_QUESTIONS:
+        d = _ask_no_data(q)
+        assert d["follow_up"] and d["follow_up"].endswith("?"), q
+        assert d["reply"].rstrip().endswith(d["follow_up"]), q
+        assert d["suggestions"], q
+
+
+def test_replies_are_short_paragraphs():
+    for q in NO_DATA_QUESTIONS:
+        d = _ask_no_data(q)
+        assert len(d["reply"]) < 900, q
+
+
+def test_kb_entries_cite_sources_and_stay_nasa_only():
+    from app.mars_kb import ENTRIES
+    assert len({e.key for e in ENTRIES}) == len(ENTRIES)
+    for e in ENTRIES:
+        assert e.answer and e.why and e.follow_up.endswith("?") and e.chips, e.key
+        assert e.sources, e.key
+        if e.nasa:
+            assert all(u.startswith("https://") and ("nasa.gov" in u) for _, u in e.sources), e.key
+
+
+def test_kb_answer_carries_source_links():
+    d = _ask_no_data("What does ChemCam do?")
+    assert d["intent"] == "kb" and d["confidence"] == "high"
+    assert d["data"]["sources"][0]["url"].startswith("https://")
+    assert "9 m" in d["reply"]
+
+
+def test_kb_does_not_invent_figures_nasa_pages_lack():
+    d = _ask_no_data("How much gravity is there?")
+    assert d["confidence"] == "none" and "won't guess" in d["reply"]
+    assert "3.7" not in d["reply"] and "m/s" not in d["reply"]
 
 
 # ---- full endpoint (skipped without the real dataset) ----

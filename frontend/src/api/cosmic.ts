@@ -319,6 +319,8 @@ export interface AssistantReply {
   location: LonLat
   data: Record<string, unknown>
   caveat: string | null
+  follow_up?: string | null
+  suggestions?: string[]
   engine: string
 }
 
